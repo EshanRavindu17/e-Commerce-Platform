@@ -1,0 +1,37 @@
+User
+- Id
+- FirstName
+- LastName
+- Email
+- Password
+- Phone
+- UserType (Customer, Supplier and Steward)
+
+
+Products
+- Id
+- Name
+- Price
+- Description
+- Quantity
+- CategoryId
+- SupplierId
+- Status (default it is pending and then approved or reject )
+- Image
+
+
+Category
+- Id
+- Name
+- ImageUrl
+
+Cart
+- Id
+- userId
+
+CartItem
+- carId
+- productId
+- quantity
+
+

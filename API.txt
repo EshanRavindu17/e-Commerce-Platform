@@ -1,0 +1,34 @@
+Products
+- GET api/products  - show all the products (Only returns if status = APPROVED)
+- GET api/products/{name} - user search for products by giving product names
+- GET api/products/category/{categoryName}  - user select a product category and view related products
+- GET api/products/{productId} - user select s product and view its details
+- GET /api/products/supplier/{supplierId} - get the supplier's products
+- GET /api/products/pending - get all the products which statu is pending
+
+- post api/products   - supplier should be able to add products (status = pending)
+
+- PATCH api/products/{productId}  - supplier should be able to update the product stock count (role = supplier)
+- PATCH api/products/{productId}/status/{status} - steward approve/reject the product
+
+
+- DELETE api/products/{productId} - supplier should be able to remove the products (role = supplier)
+
+
+
+Carts
+- GET /api/cart
+
+- POST /api/cart/items
+
+- PUT /api/cart/items/{itemId} - Update cart item quantity
+
+- DELETE /api/cart/items/{itemId} - Remove item from cart
+- DELETE /api/cart/clear - clear cart
+
+
+User
+- POST /api/users - (Roles: CUSTOMER, SUPPLIER, STEWARD) create user
+
+- GET /api/users/me - Get logged-in user profile(Uses Cognito JWT to identify user)
+- GET /api/users/{userId} - get user by id
