@@ -1,0 +1,1 @@
+Because BFF is responsible for Authentication, Authorization, Request orchestration and Security

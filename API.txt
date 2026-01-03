@@ -1,30 +1,36 @@
 Products
-- GET api/products  - show all the products (Only returns if status = APPROVED)
+- GET api/products  - show all the products (Only returns if status = APPROVED)  ----> Done
 - GET api/products/{name} - user search for products by giving product names
 - GET api/products/category/{categoryName}  - user select a product category and view related products
-- GET api/products/{productId} - user select s product and view its details
+
+- GET api/products/categories   ---->To Do
+- GET api/products/{productId} - user select s product and view its details --->To Do
+- PATCH api/products/{productId}  - supplier should be able to update the product stock count (role = supplier) -->To Do
+- DELETE api/products/{productId} - supplier should be able to remove the products (role = supplier) --->To Do
+
 - GET /api/products/supplier/{supplierId} - get the supplier's products
-- GET /api/products/pending - get all the products which statu is pending
+- GET /api/products/pending - get all the products which status is pending
 
-- post api/products   - supplier should be able to add products (status = pending)
-
-- PATCH api/products/{productId}  - supplier should be able to update the product stock count (role = supplier)
-- PATCH api/products/{productId}/status/{status} - steward approve/reject the product
+- post api/products   - supplier should be able to add products (status = pending)  --->Done
 
 
-- DELETE api/products/{productId} - supplier should be able to remove the products (role = supplier)
+- PATCH api/products/{productId}/status/{status} - steward approve/reject the product  --- add query parameter instead of using path parameter
+
+
+
 
 
 
 Carts
 - GET /api/cart
+- DELETE /api/cart -clear cart
 
 - POST /api/cart/items
 
 - PUT /api/cart/items/{itemId} - Update cart item quantity
 
 - DELETE /api/cart/items/{itemId} - Remove item from cart
-- DELETE /api/cart/clear - clear cart
+
 
 
 User
@@ -32,3 +38,13 @@ User
 
 - GET /api/users/me - Get logged-in user profile(Uses Cognito JWT to identify user)
 - GET /api/users/{userId} - get user by id
+
+
+/project-root
+│── /frontend          # Microfrontends
+│── /bff               # Backend-for-Frontend layer
+│── /services          # Microservices (Product, Supplier, etc.)
+│── /gateway           # API Gateway / Edge routing
+│── /config            # Shared configs (Docker, k8s, env files)
+│── /docs              # Documentation, diagrams
+│── /scripts           # Utility scripts (CI/CD, build, deploy)
