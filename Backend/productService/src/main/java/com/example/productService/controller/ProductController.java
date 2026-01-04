@@ -1,6 +1,7 @@
 package com.example.productService.controller;
 
-import com.example.productService.dto.ProductDTO;
+import com.example.productService.dto.ProductDto;
+import com.example.productService.dto.UpdateProductDto;
 import com.example.productService.entity.Category;
 import com.example.productService.entity.Product;
 import com.example.productService.service.ProductService;
@@ -39,18 +40,12 @@ public class ProductController {
     @PostMapping
     // Later, replace supplierId and role header with: Cognito JWT extraction
     public ResponseEntity<Product> addProduct(
-            @RequestBody ProductDTO productDTO,
-            @RequestHeader("USER-ID") Integer supplierId,
-            @RequestHeader("USER-ROLE") String role
+            @RequestBody ProductDto productDTO,
+            @RequestHeader("X-USER-ID") Integer supplierId,
+            @RequestHeader("X-USER-ROLE") String role
     ) {
-        if ("SUPPLIER".equals(role)) {
-            Product saveProduct =  productService.addProduct(productDTO, supplierId);
-            return new ResponseEntity<>(saveProduct, HttpStatus.CREATED);
-        }
-        else{
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
+        Product savedProduct = productService.addProduct(productDTO, supplierId, role);
+        return ResponseEntity.status(HttpStatus.CREATED).body(savedProduct);
     }
 
     @GetMapping("/categories")
@@ -61,5 +56,35 @@ public class ProductController {
     @GetMapping("/{productId}")
     public Product getProductById(@PathVariable Integer productId) {
         return productService.getProductById(productId);
+    }
+
+    @DeleteMapping("/{productId}")
+    public ResponseEntity<String> deleteProductById(
+            @PathVariable Integer productId,
+            @RequestHeader("X-USER-ID") Integer supplierId,
+            @RequestHeader("X-USER-ROLE") String role
+    ) {
+        productService.deleteProduct(productId, supplierId, role);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{productId}")
+    public ResponseEntity<Product> updateProduct(
+            @PathVariable Integer productId,
+            @RequestBody UpdateProductDto updateProduct,
+            @RequestHeader("X-USER-ID") Integer supplierId,
+            @RequestHeader("X-USER-ROLE") String role
+    ){
+        Product updated = productService.updateProduct(productId, supplierId, role, updateProduct);
+        return ResponseEntity.ok(updated);
+    }
+
+    @GetMapping("/supplier/{supplierId}")
+    public ResponseEntity<List<Product>> getSupplierProducts(
+            @PathVariable Integer supplierId
+    ) {
+        List<Product> products = productService.getProductsBySupplier(supplierId);
+        return ResponseEntity.ok(products);
+
     }
 }

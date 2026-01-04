@@ -3,10 +3,11 @@ Products
 - GET api/products/{name} - user search for products by giving product names
 - GET api/products/category/{categoryName}  - user select a product category and view related products
 
-- GET api/products/categories   ---->To Do
+- GET api/products/categories   ---->Done
 - GET api/products/{productId} - user select s product and view its details --->To Do
+
 - PATCH api/products/{productId}  - supplier should be able to update the product stock count (role = supplier) -->To Do
-- DELETE api/products/{productId} - supplier should be able to remove the products (role = supplier) --->To Do
+- DELETE api/products/{productId} - supplier should be able to remove the products (role = supplier) ---> Done
 
 - GET /api/products/supplier/{supplierId} - get the supplier's products
 - GET /api/products/pending - get all the products which status is pending
