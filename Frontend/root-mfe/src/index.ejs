@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>NexaGrid - Premium E-Commerce Platform</title>
+  <link rel="icon" type="image/png" href="/images/nexagrid-icon.png">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: localhost:*; script-src 'unsafe-inline' 'unsafe-eval' https: localhost:*; connect-src https: localhost:* ws://localhost:*; style-src 'unsafe-inline' https:; object-src 'none';">
+  <meta name="importmap-type" use-injector />
+  <!-- If you wish to turn off import-map-overrides for specific environments (prod), uncomment the line below -->
+  <!-- More info at https://github.com/single-spa/import-map-overrides/blob/main/docs/configuration.md#domain-list -->
+  <!-- <meta name="import-map-overrides-domains" content="denylist:prod.example.com" /> -->
+
+  <!-- Shared dependencies go into this import map -->
+  <script type="injector-importmap">
+    {
+      "imports": {
+        "single-spa": "https://cdn.jsdelivr.net/npm/single-spa@6.0.3/lib/es2015/esm/single-spa.min.js"
+      }
+    }
+  </script>
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/single-spa@6.0.3/lib/es2015/esm/single-spa.min.js" as="module">
+
+  <!-- Add your organization's prod import map URL to this script's src  -->
+  <!-- <script type="injector-importmap" src="/importmap.json"></script> -->
+
+  <% if (isLocal) { %>
+  <script type="injector-importmap">
+    {
+      "imports": {
+        "@nexagrid/root-config": "//localhost:9000/nexagrid-root-config.js",
+        "@nexagrid/auth-mfe": "//localhost:9001/nexagrid-auth-mfe.js",
+        "@nexagrid/cart-mfe": "//localhost:9002/nexagrid-cart-mfe.js",
+        "@nexagrid/customer-mfe": "//localhost:9003/nexagrid-customer-mfe.js",
+        "@nexagrid/footer-mfe": "//localhost:9004/nexagrid-footer-mfe.js",
+        "@nexagrid/navbar-mfe": "//localhost:9005/nexagrid-navbar-mfe.js",
+        "@nexagrid/product-mfe": "//localhost:9006/nexagrid-product-mfe.js",
+        "@nexagrid/steward-dashboard-mfe": "//localhost:9007/nexagrid-steward-dashboard-mfe.js",
+        "@nexagrid/supplier-dashboard-mfe": "//localhost:9008/nexagrid-supplier-dashboard-mfe.js",
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom": "https://esm.sh/react-dom@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "@single-spa/welcome": "https://cdn.jsdelivr.net/npm/single-spa-welcome/dist/single-spa-welcome.min.js"
+      }
+    }
+  </script>
+  <% } %>
+
+  <script src="https://cdn.jsdelivr.net/npm/import-map-overrides@5.1.1/dist/import-map-overrides.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@single-spa/import-map-injector@2.0.1/lib/import-map-injector.js"></script>
+</head>
+<body>
+  <noscript>
+    You need to enable JavaScript to run this app.
+  </noscript>
+  <main></main>
+  <script>
+    window.importMapInjector.initPromise.then(() => {
+      import('@nexagrid/root-config');
+    });
+  </script>
+  <import-map-overrides-full show-when-local-storage="devtools" dev-libs></import-map-overrides-full>
+</body>
+</html>

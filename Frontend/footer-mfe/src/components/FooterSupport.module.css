@@ -1,0 +1,51 @@
+/* ── Column ── */
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Column Title ── */
+.columnTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: #F6E7BC;
+  margin: 0 0 16px 0;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* ── Link Lists ── */
+.linkList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.footerLink {
+  color: rgba(246, 231, 188, 0.75);
+  text-decoration: none;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footerLink::before {
+  content: "→";
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.footerLink:hover {
+  color: #0AC4E0;
+  margin-left: 8px;
+}
+
+.footerLink:hover::before {
+  opacity: 1;
+}

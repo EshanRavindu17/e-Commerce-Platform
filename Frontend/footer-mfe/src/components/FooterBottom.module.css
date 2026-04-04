@@ -1,0 +1,59 @@
+/* ── Bottom Footer ── */
+.bottomFooter {
+  background: rgba(10, 196, 224, 0.08);
+  border-top: 1px solid rgba(10, 196, 224, 0.12);
+  padding: 24px 0;
+}
+
+.bottomContainer {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.copyright {
+  font-size: 13px;
+  color: rgba(246, 231, 188, 0.7);
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+
+.bottomLinks {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.bottomLink {
+  color: rgba(246, 231, 188, 0.7);
+  text-decoration: none;
+  font-size: 13px;
+  transition: all 0.3s ease;
+  letter-spacing: 0.3px;
+}
+
+.bottomLink:hover {
+  color: #0AC4E0;
+}
+
+.divider {
+  color: rgba(10, 196, 224, 0.3);
+}
+
+/* ── Responsive Design ── */
+@media (max-width: 768px) {
+  .bottomContainer {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .bottomLinks {
+    justify-content: center;
+  }
+}

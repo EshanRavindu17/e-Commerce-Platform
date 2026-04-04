@@ -1,0 +1,35 @@
+<single-spa-router>
+  <div>
+    <nav>
+      <application name="@nexagrid/navbar-mfe"></application>
+    </nav>
+
+    <main>
+      <route default>
+        <application name="@nexagrid/product-mfe"></application>
+      </route>
+      <route path="login">
+        <application name="@nexagrid/auth-mfe"></application>
+      </route>
+      <route path="register">
+        <application name="@nexagrid/auth-mfe"></application>
+      </route>
+      <route path="dashboard">
+        <application name="@nexagrid/steward-dashboard-mfe"></application>
+      </route>
+      <route path="supplier">
+        <application name="@nexagrid/supplier-dashboard-mfe"></application>
+      </route>
+      <route path="customer">
+        <application name="@nexagrid/customer-mfe"></application>
+      </route>
+      <route path="cart">
+        <application name="@nexagrid/cart-mfe"></application>
+      </route>
+    </main>
+    
+    <footer>
+      <application name="@nexagrid/footer-mfe"></application>
+    </footer>
+  </div>
+</single-spa-router>

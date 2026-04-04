@@ -1,0 +1,364 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap");
+
+.dashboardPage {
+  min-height: 100vh;
+  padding: 30px 24px 40px;
+  background:
+    radial-gradient(circle at 8% 4%, rgba(9, 146, 194, 0.18) 0, transparent 36%),
+    radial-gradient(circle at 92% 0%, rgba(246, 231, 188, 0.4) 0, transparent 26%),
+    linear-gradient(180deg, #eff3fa 0%, #f8fbff 100%);
+  color: #0b2d72;
+  font-family: "DM Sans", sans-serif;
+}
+
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 22px 24px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #0b2d72 0%, #0992c2 100%);
+  box-shadow: 0 12px 28px rgba(11, 45, 114, 0.2);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: rgba(246, 231, 188, 0.95);
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 30px;
+  color: #ffffff;
+}
+
+.pageSubtitle {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.primaryAction {
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  background: #f6e7bc;
+  color: #0b2d72;
+  cursor: pointer;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.statCard {
+  background: #ffffff;
+  border: 1px solid rgba(9, 146, 194, 0.18);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 8px 20px rgba(11, 45, 114, 0.08);
+}
+
+.statCard p {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.statCard strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 28px;
+  color: #0b2d72;
+}
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid rgba(9, 146, 194, 0.18);
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 8px 20px rgba(11, 45, 114, 0.08);
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.panelHeader h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.linkAction {
+  color: #0992c2;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 540px;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+  font-size: 13px;
+}
+
+.table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.emptyCart {
+  margin: 0;
+  font-size: 14px;
+  color: #475569;
+}
+
+.shipped,
+.processing,
+.delivered {
+  display: inline-block;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.shipped {
+  background: rgba(9, 146, 194, 0.14);
+  color: #0b2d72;
+}
+
+.processing {
+  background: rgba(217, 119, 6, 0.14);
+  color: #92400e;
+}
+
+.delivered {
+  background: rgba(15, 141, 103, 0.14);
+  color: #166534;
+}
+
+.actionList {
+  display: grid;
+  gap: 9px;
+}
+
+.actionButton {
+  display: block;
+  text-decoration: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #0b2d72;
+  border: 1px solid rgba(11, 45, 114, 0.16);
+  background: rgba(239, 243, 250, 0.9);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.qtyInput {
+  width: 72px;
+  border: 1px solid rgba(11, 45, 114, 0.2);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.removeButton {
+  border: 0;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.14);
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.cartFooter {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.cartFooter p {
+  margin: 0;
+  color: #0b2d72;
+  font-size: 14px;
+}
+
+.cartActions {
+  display: flex;
+  gap: 8px;
+}
+
+.clearButton,
+.checkoutButton {
+  border: 0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 12px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.clearButton {
+  background: rgba(148, 163, 184, 0.22);
+  color: #1e293b;
+}
+
+.checkoutButton {
+  background: linear-gradient(135deg, #0b2d72 0%, #0992c2 100%);
+  color: #ffffff;
+}
+
+.rewardsBox {
+  margin-top: 12px;
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(135deg, rgba(246, 231, 188, 0.45), rgba(9, 146, 194, 0.12));
+}
+
+.rewardsBox h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.rewardsBox p {
+  margin: 8px 0 10px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.secondaryAction {
+  border: 0;
+  border-radius: 10px;
+  background: #0b2d72;
+  color: #ffffff;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recommendGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.recommendCard {
+  border: 1px solid rgba(9, 146, 194, 0.18);
+  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.tag {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(9, 146, 194, 0.14);
+  color: #0b2d72;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.recommendCard h3 {
+  margin: 10px 0 6px;
+  font-size: 16px;
+}
+
+.recommendCard p {
+  margin: 0;
+  color: #166534;
+  font-weight: 700;
+}
+
+@media (max-width: 1080px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mainGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .recommendGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboardPage {
+    padding: 16px 12px 24px;
+  }
+
+  .pageHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pageTitle {
+    font-size: 24px;
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .statCard strong {
+    font-size: 24px;
+  }
+
+  .recommendGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .cartFooter {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cartActions {
+    width: 100%;
+    flex-direction: column;
+  }
+}

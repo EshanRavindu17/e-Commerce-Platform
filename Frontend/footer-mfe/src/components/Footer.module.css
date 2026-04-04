@@ -1,0 +1,46 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap");
+
+/* ── Footer Container ── */
+.footer {
+  background: #0B2D72;
+  color: #F6E7BC;
+  font-family: "DM Sans", sans-serif;
+}
+
+/* ── Main Footer Content ── */
+.mainFooter {
+  background: #0B2D72;
+  padding: 60px 0 40px;
+}
+
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 48px;
+}
+
+/* ── Responsive Design ── */
+@media (max-width: 768px) {
+  .container {
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+
+  .mainFooter {
+    padding: 40px 0 30px;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .mainFooter {
+    padding: 40px 0 30px;
+  }
+}
