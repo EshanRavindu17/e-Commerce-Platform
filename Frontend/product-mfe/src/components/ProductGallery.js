@@ -1,6 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import ProductCard from "./ProductCard";
-import { SAMPLE_PRODUCTS } from "./constants";
+import { addProductToCart, fetchProducts } from "../services/bffProductApi";
 import styles from "./ProductGallery.module.css";
 
 const PRODUCTS_PER_PAGE = 20;
@@ -14,27 +14,49 @@ const ProductGallery = ({
   currentPage = 1,
   onPageChange = () => {},
 }) => {
+  const [products, setProducts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState("");
+  const [cartFeedback, setCartFeedback] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProducts = async () => {
+      try {
+        setIsLoading(true);
+        setFetchError("");
+        const remoteProducts = await fetchProducts(filters);
+
+        if (!mounted) {
+          return;
+        }
+
+        setProducts(remoteProducts);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+
+        setFetchError(error.message || "Failed to load products from BFF.");
+        setProducts([]);
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadProducts();
+
+    return () => {
+      mounted = false;
+    };
+  }, [filters]);
+
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    let products = [...SAMPLE_PRODUCTS];
-
-    // Filter by category
-    if (filters.activeCategory && filters.activeCategory !== "all") {
-      products = products.filter(
-        (p) =>
-          p.category.toLowerCase() === filters.activeCategory.toLowerCase(),
-      );
-    }
-
-    // Filter by search term
-    const normalizedSearch = (filters.searchTerm || "").trim().toLowerCase();
-    if (normalizedSearch) {
-      products = products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(normalizedSearch) ||
-          p.category.toLowerCase().includes(normalizedSearch),
-      );
-    }
+    let result = [...products];
 
     // Filter by price ranges
     const selectedPrices = Object.entries(filters.priceRanges || {})
@@ -42,12 +64,13 @@ const ProductGallery = ({
       .map(([range]) => range);
 
     if (selectedPrices.length > 0) {
-      products = products.filter((p) => {
+      result = result.filter((p) => {
         return selectedPrices.some((range) => {
-          if (range === "$0-50") return p.price <= 50;
-          if (range === "$50-100") return p.price > 50 && p.price <= 100;
-          if (range === "$100-500") return p.price > 100 && p.price <= 500;
+          if (range === "0-50") return p.price <= 50;
+          if (range === "50-100") return p.price > 50 && p.price <= 100;
+          if (range === "100-500") return p.price > 100 && p.price <= 500;
           if (range === "$500+") return p.price > 500;
+          if (range === "500+") return p.price > 500;
           return false;
         });
       });
@@ -56,19 +79,19 @@ const ProductGallery = ({
     // Sort products
     switch (filters.sortBy) {
       case "newest":
-        products.sort((a, b) => (b.isNew ? 1 : -1));
+        result.sort((a, b) => (b.isNew ? 1 : -1));
         break;
       case "price-low":
-        products.sort((a, b) => a.price - b.price);
+        result.sort((a, b) => a.price - b.price);
         break;
       case "price-high":
-        products.sort((a, b) => b.price - a.price);
+        result.sort((a, b) => b.price - a.price);
         break;
       case "rating":
-        products.sort((a, b) => b.rating - a.rating);
+        result.sort((a, b) => b.rating - a.rating);
         break;
       case "bestselling":
-        products.sort((a, b) => b.reviews - a.reviews);
+        result.sort((a, b) => b.reviews - a.reviews);
         break;
       case "featured":
       default:
@@ -76,8 +99,14 @@ const ProductGallery = ({
         break;
     }
 
-    return products;
-  }, [filters]);
+    return result;
+  }, [filters, products]);
+
+  if (isLoading) {
+    return (
+      <div className={styles.emptyState}>Loading products from BFF...</div>
+    );
+  }
 
   if (filteredProducts.length === 0) {
     return (
@@ -92,7 +121,8 @@ const ProductGallery = ({
         </svg>
         <h3 className={styles.emptyTitle}>No Products Found</h3>
         <p className={styles.emptyText}>
-          Try adjusting your filters to find what you're looking for
+          {fetchError ||
+            "Try adjusting your filters to find what you're looking for"}
         </p>
       </div>
     );
@@ -118,8 +148,32 @@ const ProductGallery = ({
     }
   };
 
+  const handleAddToCart = async (product) => {
+    setCartFeedback("");
+
+    try {
+      await addProductToCart({ productId: product.id, quantity: 1 });
+      setCartFeedback(`${product.name} added to cart.`);
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("nexagrid:cart-updated"));
+      }
+    } catch (error) {
+      if (/Authentication required/i.test(error.message || "")) {
+        if (typeof window !== "undefined") {
+          window.location.href = "/login";
+        }
+        return;
+      }
+
+      setCartFeedback(error.message || "Failed to add product to cart.");
+    }
+  };
+
   return (
     <div className={styles.galleryContainer}>
+      {fetchError ? <p className={styles.emptyText}>{fetchError}</p> : null}
+      {cartFeedback ? <p className={styles.emptyText}>{cartFeedback}</p> : null}
       <div className={styles.header}>
         <p className={styles.resultCount}>
           Showing <strong>{productPage.length}</strong> of{" "}
@@ -130,7 +184,11 @@ const ProductGallery = ({
 
       <div className={styles.grid}>
         {productPage.map((product) => (
-          <ProductCard key={product.id} product={product} />
+          <ProductCard
+            key={product.id}
+            product={product}
+            onAddToCart={handleAddToCart}
+          />
         ))}
       </div>
 

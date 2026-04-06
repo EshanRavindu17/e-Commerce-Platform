@@ -1,71 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./root.component.module.css";
-
-const STORAGE_KEY = "nexagrid:supply-ops:v1";
-const EVENT_NAME = "nexagrid:supply-ops:updated";
-
-const seedData = {
-  products: [
-    {
-      id: "PRD-1001",
-      name: "Premium Ceylon Tea",
-      category: "Beverages",
-      price: 18.5,
-      stock: 210,
-      supplier: "Lanka Fresh Exports",
-      lastUpdated: "2026-04-01T08:00:00.000Z",
-    },
-    {
-      id: "PRD-1002",
-      name: "Organic Coconut Oil",
-      category: "Groceries",
-      price: 24.0,
-      stock: 84,
-      supplier: "Lanka Fresh Exports",
-      lastUpdated: "2026-04-02T09:15:00.000Z",
-    },
-    {
-      id: "PRD-1003",
-      name: "Spice Combo Pack",
-      category: "Groceries",
-      price: 32.75,
-      stock: 42,
-      supplier: "Lanka Fresh Exports",
-      lastUpdated: "2026-04-02T12:30:00.000Z",
-    },
-  ],
-  requests: [],
-};
-
-const buildStore = () => {
-  if (typeof window === "undefined") {
-    return seedData;
-  }
-
-  const existing = window.localStorage.getItem(STORAGE_KEY);
-  if (existing) {
-    try {
-      const parsed = JSON.parse(existing);
-      if (parsed?.products && parsed?.requests) {
-        return parsed;
-      }
-    } catch (error) {
-      // Fall through to reset malformed storage.
-    }
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seedData));
-  return seedData;
-};
-
-const persistStore = (nextStore) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextStore));
-  window.dispatchEvent(new CustomEvent(EVENT_NAME));
-};
+import {
+  fetchProductCategories,
+  fetchSupplierProducts,
+  getProductImageUploadUrl,
+  submitNewProduct,
+  submitProductUpdate,
+  uploadImageToS3,
+} from "./services/bffSupplierApi";
 
 const formatMoney = (amount) => `$${Number(amount).toFixed(2)}`;
 
@@ -77,109 +19,244 @@ const formatDate = (dateString) =>
     minute: "2-digit",
   });
 
-const initialFormState = {
-  productId: "",
+const initialCreateFormState = {
+  productName: "",
+  categoryId: "",
   proposedPrice: "",
   proposedStock: "",
-  reason: "",
+  description: "",
+  productImageFile: null,
 };
 
 export default function Root() {
-  const [store, setStore] = useState(buildStore);
-  const [formData, setFormData] = useState(initialFormState);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [createFormData, setCreateFormData] = useState(initialCreateFormState);
+  const [rowStockInputs, setRowStockInputs] = useState({});
   const [feedback, setFeedback] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [activeStockUpdateId, setActiveStockUpdateId] = useState("");
+
+  const loadProducts = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const nextProducts = await fetchSupplierProducts();
+      setProducts(nextProducts);
+      setFeedback("");
+    } catch (error) {
+      setFeedback(
+        error.message || "Unable to load supplier products from BFF.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const syncStore = () => setStore(buildStore());
+    loadProducts();
+  }, [loadProducts]);
 
-    window.addEventListener(EVENT_NAME, syncStore);
-    window.addEventListener("storage", (event) => {
-      if (event.key === STORAGE_KEY) {
-        syncStore();
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const nextCategories = await fetchProductCategories();
+        setCategories(nextCategories);
+      } catch (error) {
+        setFeedback(error.message || "Unable to load categories from BFF.");
       }
-    });
-
-    return () => {
-      window.removeEventListener(EVENT_NAME, syncStore);
-      window.removeEventListener("storage", syncStore);
     };
+
+    loadCategories();
   }, []);
 
   const sortedProducts = useMemo(
-    () => [...store.products].sort((a, b) => a.name.localeCompare(b.name)),
-    [store.products],
+    () => [...products].sort((a, b) => a.name.localeCompare(b.name)),
+    [products],
   );
 
-  const requestsByLatest = useMemo(
+  const statusHistory = useMemo(
     () =>
-      [...store.requests].sort(
-        (a, b) => new Date(b.requestedAt) - new Date(a.requestedAt),
-      ),
-    [store.requests],
+      [...products]
+        .sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated))
+        .slice(0, 20),
+    [products],
   );
 
   const summary = useMemo(() => {
-    const pending = store.requests.filter((request) => request.status === "Pending").length;
-    const lowStock = store.products.filter((product) => product.stock < 50).length;
-    const totalStock = store.products.reduce((sum, product) => sum + product.stock, 0);
+    const pending = products.filter(
+      (product) => product.status === "PENDING",
+    ).length;
+    const lowStock = products.filter((product) => product.stock < 50).length;
+    const totalStock = products.reduce(
+      (sum, product) => sum + product.stock,
+      0,
+    );
 
     return {
       pending,
       lowStock,
       totalStock,
     };
-  }, [store.products, store.requests]);
+  }, [products]);
 
-  const handleFieldChange = (event) => {
+  const handleCreateFieldChange = (event) => {
     const { name, value } = event.target;
-    setFormData((prev) => ({
+    setCreateFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
 
-  const handleSubmit = (event) => {
+  const handleInlineStockInputChange = (productId, value) => {
+    setRowStockInputs((prev) => ({
+      ...prev,
+      [productId]: value,
+    }));
+  };
+
+  const handleImageChange = (event) => {
+    const [file] = event.target.files || [];
+
+    if (!file) {
+      setCreateFormData((prev) => ({
+        ...prev,
+        productImageFile: null,
+      }));
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setFeedback("Please upload a valid image file.");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setFeedback("Image size must be 2MB or less.");
+      return;
+    }
+
+    setFeedback("");
+    setCreateFormData((prev) => ({
+      ...prev,
+      productImageFile: file,
+    }));
+  };
+
+  const handleCreateSubmit = async (event) => {
     event.preventDefault();
     setFeedback("");
 
-    const { productId, proposedPrice, proposedStock, reason } = formData;
-    if (!productId || !proposedPrice || !proposedStock || !reason.trim()) {
-      setFeedback("Fill in all fields before submitting the update request.");
+    const {
+      productName,
+      categoryId,
+      proposedPrice,
+      proposedStock,
+      description,
+      productImageFile,
+    } = createFormData;
+
+    if (
+      !productName.trim() ||
+      !categoryId ||
+      !proposedPrice ||
+      !proposedStock ||
+      !description.trim()
+    ) {
+      setFeedback("Fill in all fields before submitting.");
       return;
     }
 
-    const matchedProduct = store.products.find((product) => product.id === productId);
-    if (!matchedProduct) {
-      setFeedback("Selected product was not found.");
+    const existingProduct = products.find(
+      (product) =>
+        String(product.name || "")
+          .trim()
+          .toLowerCase() === productName.trim().toLowerCase(),
+    );
+
+    if (existingProduct) {
+      setFeedback(
+        "Product already exists. Use the row stock update action in Current Stock.",
+      );
       return;
     }
 
-    const nextRequest = {
-      id: `REQ-${Date.now()}`,
-      productId,
-      productName: matchedProduct.name,
-      supplier: matchedProduct.supplier,
-      currentPrice: matchedProduct.price,
-      proposedPrice: Number(proposedPrice),
-      currentStock: matchedProduct.stock,
-      proposedStock: Number(proposedStock),
-      reason: reason.trim(),
-      status: "Pending",
-      requestedAt: new Date().toISOString(),
-      reviewedAt: null,
-      reviewedBy: null,
-      stewardNote: "",
-    };
+    try {
+      setIsCreating(true);
+      let uploadedImageUrl = "";
 
-    const nextStore = {
-      ...store,
-      requests: [nextRequest, ...store.requests],
-    };
+      if (productImageFile) {
+        const uploadData = await getProductImageUploadUrl(productImageFile);
+        await uploadImageToS3({
+          uploadUrl: uploadData.uploadUrl,
+          file: productImageFile,
+        });
+        uploadedImageUrl = uploadData.fileUrl;
+      }
 
-    persistStore(nextStore);
-    setStore(nextStore);
-    setFormData(initialFormState);
-    setFeedback("Update request sent to steward for approval.");
+      await submitNewProduct({
+        createPayload: {
+          name: productName.trim(),
+          categoryId: Number(categoryId),
+          price: Number(proposedPrice),
+          quantity: Number(proposedStock),
+          description: description.trim(),
+          imageurl: uploadedImageUrl,
+          imageUrl: uploadedImageUrl,
+        },
+      });
+
+      setCreateFormData(initialCreateFormState);
+      setFeedback("New product added successfully through BFF.");
+      await loadProducts();
+    } catch (error) {
+      setFeedback(error.message || "Failed to add new product.");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleInlineStockUpdate = async (product) => {
+    setFeedback("");
+
+    if (product.status !== "APPROVED") {
+      setFeedback("Only approved products can have stock updates.");
+      return;
+    }
+
+    const inputValue = rowStockInputs[product.id];
+    const proposedStock = inputValue ?? String(product.stock);
+
+    if (proposedStock === "") {
+      setFeedback("Enter stock quantity before updating.");
+      return;
+    }
+
+    try {
+      setActiveStockUpdateId(String(product.id));
+      await submitProductUpdate({
+        productId: product.id,
+        updatePayload: {
+          quantity: Number(proposedStock),
+        },
+      });
+
+      setRowStockInputs((prev) => ({
+        ...prev,
+        [product.id]: "",
+      }));
+      setFeedback("Approved product stock updated successfully through BFF.");
+      await loadProducts();
+    } catch (error) {
+      setFeedback(error.message || "Failed to update approved product stock.");
+    } finally {
+      setActiveStockUpdateId("");
+    }
+  };
+
+  const getRowStockInputValue = (product) => {
+    const inputValue = rowStockInputs[product.id];
+    return inputValue !== undefined ? inputValue : String(product.stock);
   };
 
   return (
@@ -189,7 +266,7 @@ export default function Root() {
           <p className={styles.eyebrow}>Supplier Operations</p>
           <h1 className={styles.pageTitle}>Supplier Control Center</h1>
           <p className={styles.pageSubtitle}>
-            Manage product inventory and submit updates for steward approval.
+            Manage product inventory through the BFF orchestration layer.
           </p>
         </div>
       </header>
@@ -197,7 +274,7 @@ export default function Root() {
       <section className={styles.statsGrid}>
         <article className={styles.statCard}>
           <p>Products Listed</p>
-          <strong>{store.products.length}</strong>
+          <strong>{products.length}</strong>
         </article>
         <article className={styles.statCard}>
           <p>Total Stock Units</p>
@@ -217,7 +294,7 @@ export default function Root() {
         <article className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2>Current Stock</h2>
-            <span>Live from shared supply data</span>
+            <span>{isLoading ? "Syncing from BFF..." : "Live from BFF"}</span>
           </div>
           <div className={styles.tableWrap}>
             <table className={styles.table}>
@@ -227,27 +304,78 @@ export default function Root() {
                   <th>Category</th>
                   <th>Price</th>
                   <th>Stock</th>
+                  <th>Status</th>
                   <th>Last Updated</th>
+                  <th>Update Stock</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedProducts.map((product) => (
-                  <tr key={product.id}>
-                    <td>{product.name}</td>
-                    <td>{product.category}</td>
-                    <td>{formatMoney(product.price)}</td>
-                    <td>
-                      <span
-                        className={
-                          product.stock < 50 ? styles.lowStockPill : styles.stockPill
-                        }
-                      >
-                        {product.stock}
-                      </span>
-                    </td>
-                    <td>{formatDate(product.lastUpdated)}</td>
+                {sortedProducts.length === 0 ? (
+                  <tr>
+                    <td colSpan="7">No products available.</td>
                   </tr>
-                ))}
+                ) : (
+                  sortedProducts.map((product) => (
+                    <tr key={product.id}>
+                      <td>{product.name}</td>
+                      <td>{product.category}</td>
+                      <td>{formatMoney(product.price)}</td>
+                      <td>
+                        <span
+                          className={
+                            product.stock < 50
+                              ? styles.lowStockPill
+                              : styles.stockPill
+                          }
+                        >
+                          {product.stock}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={
+                            styles[
+                              String(product.status || "pending").toLowerCase()
+                            ]
+                          }
+                        >
+                          {String(product.status || "PENDING").toLowerCase()}
+                        </span>
+                      </td>
+                      <td>{formatDate(product.lastUpdated)}</td>
+                      <td>
+                        <div className={styles.inlineStockAction}>
+                          <input
+                            className={styles.inlineStockInput}
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={getRowStockInputValue(product)}
+                            onChange={(event) =>
+                              handleInlineStockInputChange(
+                                product.id,
+                                event.target.value,
+                              )
+                            }
+                          />
+                          <button
+                            type="button"
+                            className={styles.inlineStockButton}
+                            disabled={
+                              product.status !== "APPROVED" ||
+                              activeStockUpdateId === String(product.id)
+                            }
+                            onClick={() => handleInlineStockUpdate(product)}
+                          >
+                            {activeStockUpdateId === String(product.id)
+                              ? "Updating..."
+                              : "Update"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -255,69 +383,92 @@ export default function Root() {
 
         <article className={styles.panel}>
           <div className={styles.panelHeader}>
-            <h2>Submit Product Update</h2>
-            <span>Requires steward approval</span>
+            <h2>Add New Product</h2>
           </div>
 
-          <form className={styles.form} onSubmit={handleSubmit}>
-            <label htmlFor="productId">Product</label>
-            <select
-              id="productId"
-              name="productId"
-              value={formData.productId}
-              onChange={handleFieldChange}
-            >
-              <option value="">Select a product</option>
-              {sortedProducts.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-            </select>
+          <div className={styles.formSection}>
+            <form className={styles.form} onSubmit={handleCreateSubmit}>
+              <label htmlFor="productName">Product Name</label>
+              <input
+                id="productName"
+                name="productName"
+                type="text"
+                value={createFormData.productName}
+                onChange={handleCreateFieldChange}
+                placeholder="Type product name"
+              />
 
-            <label htmlFor="proposedPrice">Proposed Price (USD)</label>
-            <input
-              id="proposedPrice"
-              name="proposedPrice"
-              type="number"
-              min="0"
-              step="0.01"
-              value={formData.proposedPrice}
-              onChange={handleFieldChange}
-              placeholder="18.50"
-            />
+              <label htmlFor="categoryId">Category</label>
+              <select
+                id="categoryId"
+                name="categoryId"
+                value={createFormData.categoryId}
+                onChange={handleCreateFieldChange}
+              >
+                <option value="">Select a category</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
 
-            <label htmlFor="proposedStock">Proposed Stock</label>
-            <input
-              id="proposedStock"
-              name="proposedStock"
-              type="number"
-              min="0"
-              step="1"
-              value={formData.proposedStock}
-              onChange={handleFieldChange}
-              placeholder="150"
-            />
+              <label htmlFor="proposedPrice">Price (USD)</label>
+              <input
+                id="proposedPrice"
+                name="proposedPrice"
+                type="number"
+                min="0"
+                step="0.01"
+                value={createFormData.proposedPrice}
+                onChange={handleCreateFieldChange}
+                placeholder="18.50"
+              />
 
-            <label htmlFor="reason">Reason for Update</label>
-            <textarea
-              id="reason"
-              name="reason"
-              rows="4"
-              value={formData.reason}
-              onChange={handleFieldChange}
-              placeholder="Explain why this update is needed"
-            />
+              <label htmlFor="proposedStock">Initial Stock</label>
+              <input
+                id="proposedStock"
+                name="proposedStock"
+                type="number"
+                min="0"
+                step="1"
+                value={createFormData.proposedStock}
+                onChange={handleCreateFieldChange}
+                placeholder="150"
+              />
 
-            <button type="submit">Send For Approval</button>
-            {feedback && <p className={styles.feedback}>{feedback}</p>}
-          </form>
+              <label htmlFor="description">Description</label>
+              <textarea
+                id="description"
+                name="description"
+                rows="4"
+                value={createFormData.description}
+                onChange={handleCreateFieldChange}
+                placeholder="Describe this product for review and catalog visibility"
+              />
+
+              <label htmlFor="productImage">Product Image</label>
+              <input
+                id="productImage"
+                name="productImage"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+              />
+
+              <button type="submit" disabled={isCreating}>
+                {isCreating ? "Submitting..." : "Send New Product For Approval"}
+              </button>
+            </form>
+          </div>
+
+          {feedback && <p className={styles.feedback}>{feedback}</p>}
         </article>
       </section>
 
       <section className={styles.panel}>
         <div className={styles.panelHeader}>
-          <h2>Request History</h2>
+          <h2>Latest Product Update Status</h2>
           <span>Newest first</span>
         </div>
 
@@ -325,34 +476,36 @@ export default function Root() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Request</th>
                 <th>Product</th>
-                <th>Price Change</th>
-                <th>Stock Change</th>
+                <th>Current Price</th>
+                <th>Current Stock</th>
                 <th>Status</th>
-                <th>Requested At</th>
+                <th>Updated At</th>
               </tr>
             </thead>
             <tbody>
-              {requestsByLatest.length === 0 ? (
+              {statusHistory.length === 0 ? (
                 <tr>
-                  <td colSpan="6">No update requests yet.</td>
+                  <td colSpan="5">No product updates found.</td>
                 </tr>
               ) : (
-                requestsByLatest.map((request) => (
-                  <tr key={request.id}>
-                    <td>{request.id}</td>
-                    <td>{request.productName}</td>
+                statusHistory.map((product) => (
+                  <tr key={product.id}>
+                    <td>{product.name}</td>
+                    <td>{formatMoney(product.price)}</td>
+                    <td>{product.stock}</td>
                     <td>
-                      {formatMoney(request.currentPrice)} to {formatMoney(request.proposedPrice)}
+                      <span
+                        className={
+                          styles[
+                            String(product.status || "pending").toLowerCase()
+                          ]
+                        }
+                      >
+                        {String(product.status || "PENDING").toLowerCase()}
+                      </span>
                     </td>
-                    <td>
-                      {request.currentStock} to {request.proposedStock}
-                    </td>
-                    <td>
-                      <span className={styles[request.status.toLowerCase()]}>{request.status}</span>
-                    </td>
-                    <td>{formatDate(request.requestedAt)}</td>
+                    <td>{formatDate(product.lastUpdated)}</td>
                   </tr>
                 ))
               )}

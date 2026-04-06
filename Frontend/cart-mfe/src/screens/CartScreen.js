@@ -1,83 +1,132 @@
 import React, { useEffect, useMemo, useState } from "react";
 import styles from "./CartScreen.module.css";
+import {
+  clearCart,
+  checkoutCart,
+  fetchCart,
+  resolveCurrentCartId,
+  removeCartItem,
+  updateCartItem,
+} from "../services/bffCartApi";
 
-const CART_STORAGE_KEY = "nexagrid:cart:v1";
-const CART_EVENT_NAME = "nexagrid:cart:updated";
+const toUiItems = (cart) => {
+  const items = cart?.items || cart?.cartItems || [];
 
-const seedCart = [
-  { id: 1, name: "Product 1", price: 1000, qty: 1 },
-  { id: 2, name: "Product 2", price: 2000, qty: 2 },
-];
-
-const buildCart = () => {
-  if (typeof window === "undefined") {
-    return seedCart;
+  if (!Array.isArray(items)) {
+    return [];
   }
 
-  const raw = window.localStorage.getItem(CART_STORAGE_KEY);
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    } catch (error) {
-      // Fall through and reset malformed cart data.
-    }
-  }
-
-  window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(seedCart));
-  return seedCart;
+  return items.map((item) => ({
+    id: item.id || item.itemId || item.productId,
+    name: item.productName || item.name || "Product",
+    price: Number(item.price || item.unitPrice || 0),
+    qty: Math.max(1, Number(item.quantity || item.qty || 1)),
+  }));
 };
 
-const persistCart = (nextCart) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(nextCart));
-  window.dispatchEvent(new CustomEvent(CART_EVENT_NAME));
-};
+const formatCurrency = (amount) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(Number(amount) || 0);
 
 const CartScreen = () => {
-  const [cartItems, setCartItems] = useState(buildCart);
+  const [cartItems, setCartItems] = useState([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [loadError, setLoadError] = useState("");
+
+  const refreshCart = async () => {
+    const cartId = await resolveCurrentCartId();
+
+    if (!cartId) {
+      setCartItems([]);
+      setLoadError("Please log in to view your cart.");
+      return;
+    }
+
+    setLoadError("");
+    const bffCart = await fetchCart(cartId);
+    setCartItems(toUiItems(bffCart));
+  };
 
   useEffect(() => {
-    const syncCart = () => setCartItems(buildCart());
+    let mounted = true;
 
-    const handleStorage = (event) => {
-      if (event.key === CART_STORAGE_KEY) {
-        syncCart();
+    const syncFromBff = async () => {
+      try {
+        setIsSyncing(true);
+        await refreshCart();
+      } catch (error) {
+        if (mounted) {
+          setLoadError(error.message || "Failed to sync cart from BFF.");
+        }
+      } finally {
+        if (mounted) {
+          setIsSyncing(false);
+        }
       }
     };
 
-    window.addEventListener(CART_EVENT_NAME, syncCart);
-    window.addEventListener("storage", handleStorage);
+    syncFromBff();
+
+    const handleCartUpdated = () => {
+      syncFromBff();
+    };
+
+    window.addEventListener("nexagrid:cart-updated", handleCartUpdated);
 
     return () => {
-      window.removeEventListener(CART_EVENT_NAME, syncCart);
-      window.removeEventListener("storage", handleStorage);
+      mounted = false;
+      window.removeEventListener("nexagrid:cart-updated", handleCartUpdated);
     };
   }, []);
 
-  const handleQtyChange = (id, value) => {
+  const handleQtyChange = async (id, value) => {
     const qty = Math.max(1, Number(value) || 1);
-    const nextCart = cartItems.map((item) =>
-      item.id === id ? { ...item, qty } : item,
-    );
-    setCartItems(nextCart);
-    persistCart(nextCart);
+
+    try {
+      await updateCartItem({
+        cartId: await resolveCurrentCartId(),
+        itemId: id,
+        quantity: qty,
+      });
+      await refreshCart();
+    } catch (error) {
+      setLoadError(error.message || "Failed to update cart item.");
+    }
   };
 
-  const handleRemove = (id) => {
-    const nextCart = cartItems.filter((item) => item.id !== id);
-    setCartItems(nextCart);
-    persistCart(nextCart);
+  const handleRemove = async (id) => {
+    try {
+      await removeCartItem({
+        cartId: await resolveCurrentCartId(),
+        itemId: id,
+      });
+      await refreshCart();
+    } catch (error) {
+      setLoadError(error.message || "Failed to remove cart item.");
+    }
   };
 
-  const handleClearCart = () => {
-    setCartItems([]);
-    persistCart([]);
+  const handleClearCart = async () => {
+    try {
+      await clearCart(await resolveCurrentCartId());
+      await refreshCart();
+    } catch (error) {
+      setLoadError(error.message || "Failed to clear cart.");
+    }
+  };
+
+  const handleCheckout = async () => {
+    try {
+      const cartId = await resolveCurrentCartId();
+      await checkoutCart(cartId);
+      await refreshCart();
+      window.dispatchEvent(new Event("nexagrid:cart-updated"));
+      setLoadError("");
+    } catch (error) {
+      setLoadError(error.message || "Failed to complete checkout.");
+    }
   };
 
   const subtotal = useMemo(
@@ -99,6 +148,9 @@ const CartScreen = () => {
           </p>
         </div>
       </header>
+
+      {isSyncing ? <p>Syncing cart with BFF...</p> : null}
+      {loadError ? <p>{loadError}</p> : null}
 
       {cartItems.length === 0 ? (
         <article className={styles.emptyState}>
@@ -130,17 +182,19 @@ const CartScreen = () => {
                   {cartItems.map((item) => (
                     <tr key={item.id}>
                       <td>{item.name}</td>
-                      <td>Rs. {item.price}</td>
+                      <td>{formatCurrency(item.price)}</td>
                       <td>
                         <input
                           type="number"
                           min="1"
                           value={item.qty}
-                          onChange={(event) => handleQtyChange(item.id, event.target.value)}
+                          onChange={(event) =>
+                            handleQtyChange(item.id, event.target.value)
+                          }
                           className={styles.qtyInput}
                         />
                       </td>
-                      <td>Rs. {item.price * item.qty}</td>
+                      <td>{formatCurrency(item.price * item.qty)}</td>
                       <td>
                         <button
                           type="button"
@@ -155,7 +209,11 @@ const CartScreen = () => {
                 </tbody>
               </table>
             </div>
-            <button type="button" className={styles.clearButton} onClick={handleClearCart}>
+            <button
+              type="button"
+              className={styles.clearButton}
+              onClick={handleClearCart}
+            >
               Clear Cart
             </button>
           </article>
@@ -167,20 +225,24 @@ const CartScreen = () => {
 
             <div className={styles.summaryRow}>
               <span>Subtotal</span>
-              <strong>Rs. {subtotal}</strong>
+              <strong>{formatCurrency(subtotal)}</strong>
             </div>
             <div className={styles.summaryRow}>
               <span>Shipping</span>
-              <strong>Rs. {shipping}</strong>
+              <strong>{formatCurrency(shipping)}</strong>
             </div>
             <div className={styles.summaryTotal}>
               <span>Total</span>
-              <strong>Rs. {finalTotal}</strong>
+              <strong>{formatCurrency(finalTotal)}</strong>
             </div>
 
-            <a href="/checkout" className={styles.checkoutButton}>
+            <button
+              type="button"
+              className={styles.checkoutButton}
+              onClick={handleCheckout}
+            >
               Proceed To Checkout
-            </a>
+            </button>
             <a href="/customer" className={styles.continueLink}>
               Back to Customer Dashboard
             </a>

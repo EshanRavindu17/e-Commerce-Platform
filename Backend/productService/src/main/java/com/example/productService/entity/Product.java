@@ -31,6 +31,7 @@ public class Product {
     @Enumerated(EnumType.STRING)
     private ProductStatus status;
 
+    @Column(name = "imageurl")
     private String imageurl;
 
 }

@@ -13,7 +13,7 @@ import NavbarMain from "./NavbarMain";
 export default function Navbar({ cartCount = 0, activePath = "/" }) {
   return (
     <header className={styles.navbar}>
-      <NavbarMain cartCount={cartCount} />
+      <NavbarMain cartCount={cartCount} activePath={activePath} />
       {/* <NavbarLinks activePath={activePath} /> */}
     </header>
   );

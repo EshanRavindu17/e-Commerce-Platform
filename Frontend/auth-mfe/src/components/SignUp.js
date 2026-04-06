@@ -1,18 +1,19 @@
 import React from "react";
 import SignUpForm from "./SignUpForm";
 import styles from "./SignUp.module.css";
+import { register } from "../services/bffAuthApi";
 
 const SignUp = () => {
   console.log("[Auth MFE] SignUp component rendering");
 
   const handleSignUp = async (formData) => {
-    console.log("Sign Up Data:", formData);
+    const payload = {
+      ...formData,
+      userType: String(formData.userType || "customer").toUpperCase(),
+    };
 
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ success: true, message: "Account created successfully!" });
-      }, 1500);
-    });
+    await register(payload);
+    return { success: true, message: "Account created successfully!" };
   };
 
   return (

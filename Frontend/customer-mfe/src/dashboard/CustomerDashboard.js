@@ -1,129 +1,114 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./CustomerDashboard.module.css";
+import {
+  clearCustomerCart,
+  fetchCustomerCart,
+  fetchCustomerProfile,
+  fetchRecommendedProducts,
+  removeCustomerCartItem,
+  updateCustomerCartItem,
+} from "../services/bffCustomerApi";
 
-const CART_STORAGE_KEY = "nexagrid:cart:v1";
-const CART_EVENT_NAME = "nexagrid:cart:updated";
-
-const seedCart = [
-  { id: 1, name: "Product 1", price: 1000, qty: 1 },
-  { id: 2, name: "Product 2", price: 2000, qty: 2 },
-];
-
-const buildCart = () => {
-  if (typeof window === "undefined") {
-    return seedCart;
-  }
-
-  const raw = window.localStorage.getItem(CART_STORAGE_KEY);
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed;
-      }
-    } catch (error) {
-      // Fall through and reset malformed cart state.
-    }
-  }
-
-  window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(seedCart));
-  return seedCart;
+const defaultProfile = {
+  firstName: "Customer",
+  userType: "Customer",
+  address: "No address available",
 };
 
-const persistCart = (nextCart) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(nextCart));
-  window.dispatchEvent(new CustomEvent(CART_EVENT_NAME));
-};
-
-const user = {
-  name: "Eshan",
-  tier: "Gold Member",
-  points: 2380,
-  savedAddress: "Colombo 05, Sri Lanka",
-};
-
-const quickStats = [
-  { label: "Orders This Month", value: "12" },
-  { label: "Wishlist Items", value: "27" },
-  { label: "Reward Points", value: user.points.toLocaleString() },
-  { label: "Open Support Tickets", value: "1" },
-];
-
-const orders = [
-  {
-    id: "ORD-2095",
-    total: "$184.00",
-    status: "Shipped",
-    eta: "Arrives Apr 05",
-  },
-  {
-    id: "ORD-2088",
-    total: "$76.50",
-    status: "Processing",
-    eta: "Preparing package",
-  },
-  {
-    id: "ORD-2081",
-    total: "$52.99",
-    status: "Delivered",
-    eta: "Delivered Apr 01",
-  },
-];
-
-const recommended = [
-  { name: "Cold Brew Coffee Kit", price: "$24.90", tag: "Trending" },
-  { name: "Organic Honey Set", price: "$19.40", tag: "Top Rated" },
-  { name: "Premium Travel Mug", price: "$29.10", tag: "New" },
-];
+const formatCurrency = (amount) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(Number(amount) || 0);
 
 const CustomerDashboard = () => {
-  const [cartItems, setCartItems] = useState(buildCart);
+  const [profile, setProfile] = useState(defaultProfile);
+  const [cartItems, setCartItems] = useState([]);
+  const [recommended, setRecommended] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [feedback, setFeedback] = useState("");
 
-  useEffect(() => {
-    const syncCart = () => setCartItems(buildCart());
+  const loadDashboardData = useCallback(async () => {
+    setIsLoading(true);
+    setFeedback("");
 
-    const handleStorage = (event) => {
-      if (event.key === CART_STORAGE_KEY) {
-        syncCart();
-      }
-    };
+    try {
+      const [nextProfile, nextCartItems, nextRecommended] = await Promise.all([
+        fetchCustomerProfile(),
+        fetchCustomerCart(),
+        fetchRecommendedProducts(),
+      ]);
 
-    window.addEventListener(CART_EVENT_NAME, syncCart);
-    window.addEventListener("storage", handleStorage);
-
-    return () => {
-      window.removeEventListener(CART_EVENT_NAME, syncCart);
-      window.removeEventListener("storage", handleStorage);
-    };
+      setProfile({
+        ...defaultProfile,
+        ...nextProfile,
+      });
+      setCartItems(nextCartItems);
+      setRecommended(nextRecommended);
+    } catch (error) {
+      setFeedback(
+        error.message || "Unable to load customer dashboard from BFF.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
   const cartTotal = useMemo(
-    () => cartItems.reduce((sum, item) => sum + Number(item.price) * Number(item.qty), 0),
+    () =>
+      cartItems.reduce(
+        (sum, item) => sum + Number(item.price) * Number(item.qty),
+        0,
+      ),
     [cartItems],
   );
 
-  const handleQtyChange = (id, value) => {
+  const quickStats = useMemo(
+    () => [
+      { label: "Products In Cart", value: String(cartItems.length) },
+      {
+        label: "Cart Subtotal",
+        value: formatCurrency(cartTotal),
+      },
+      { label: "Recommended Items", value: String(recommended.length) },
+      {
+        label: "Account Type",
+        value: String(profile.userType || "Customer"),
+      },
+    ],
+    [cartItems.length, cartTotal, profile.userType, recommended.length],
+  );
+
+  const handleQtyChange = async (id, value) => {
     const qty = Math.max(1, Number(value) || 1);
-    const nextCart = cartItems.map((item) =>
-      item.id === id ? { ...item, qty } : item,
-    );
-    setCartItems(nextCart);
-    persistCart(nextCart);
+    try {
+      await updateCustomerCartItem({ itemId: id, quantity: qty });
+      await loadDashboardData();
+    } catch (error) {
+      setFeedback(error.message || "Failed to update cart item.");
+    }
   };
 
-  const handleRemove = (id) => {
-    const nextCart = cartItems.filter((item) => item.id !== id);
-    setCartItems(nextCart);
-    persistCart(nextCart);
+  const handleRemove = async (id) => {
+    try {
+      await removeCustomerCartItem({ itemId: id });
+      await loadDashboardData();
+    } catch (error) {
+      setFeedback(error.message || "Failed to remove cart item.");
+    }
   };
 
-  const handleClearCart = () => {
-    setCartItems([]);
-    persistCart([]);
+  const handleClearCart = async () => {
+    try {
+      await clearCustomerCart();
+      await loadDashboardData();
+    } catch (error) {
+      setFeedback(error.message || "Failed to clear cart.");
+    }
   };
 
   return (
@@ -131,15 +116,21 @@ const CustomerDashboard = () => {
       <header className={styles.pageHeader}>
         <div>
           <p className={styles.eyebrow}>Customer Portal</p>
-          <h1 className={styles.pageTitle}>Welcome back, {user.name}</h1>
+          <h1 className={styles.pageTitle}>
+            Welcome back, {profile.firstName || "Customer"}
+          </h1>
           <p className={styles.pageSubtitle}>
-            {user.tier} | Default delivery: {user.savedAddress}
+            {profile.userType || "Customer"} | Default delivery:{" "}
+            {profile.address || "N/A"}
           </p>
         </div>
         <button type="button" className={styles.primaryAction}>
           Continue Shopping
         </button>
       </header>
+
+      {isLoading ? <p>Loading customer data from BFF...</p> : null}
+      {feedback ? <p>{feedback}</p> : null}
 
       <section className={styles.statsGrid}>
         {quickStats.map((stat) => (
@@ -151,40 +142,6 @@ const CustomerDashboard = () => {
       </section>
 
       <section className={styles.mainGrid}>
-        <article className={styles.panel}>
-          <div className={styles.panelHeader}>
-            <h2>Recent Orders</h2>
-            <a href="/orders" className={styles.linkAction}>
-              View All
-            </a>
-          </div>
-
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Order ID</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                  <th>Tracking</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id}>
-                    <td>{order.id}</td>
-                    <td>{order.total}</td>
-                    <td>
-                      <span className={styles[order.status.toLowerCase()]}>{order.status}</span>
-                    </td>
-                    <td>{order.eta}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </article>
-
         <article className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2>Quick Actions</h2>
@@ -203,14 +160,11 @@ const CustomerDashboard = () => {
               Contact Support
             </a>
           </div>
-
+          {/* 
           <div className={styles.rewardsBox}>
-            <h3>Loyalty Rewards</h3>
-            <p>You are 620 points away from Platinum perks.</p>
-            <button type="button" className={styles.secondaryAction}>
-              Redeem Points
-            </button>
-          </div>
+            <h3>Account Snapshot</h3>
+            <p>Profile and cart data are now loaded directly from live BFF endpoints.</p>
+          </div> */}
         </article>
       </section>
 
@@ -239,17 +193,19 @@ const CustomerDashboard = () => {
                   {cartItems.map((item) => (
                     <tr key={item.id}>
                       <td>{item.name}</td>
-                      <td>Rs. {item.price}</td>
+                      <td>{formatCurrency(item.price)}</td>
                       <td>
                         <input
                           className={styles.qtyInput}
                           type="number"
                           min="1"
                           value={item.qty}
-                          onChange={(event) => handleQtyChange(item.id, event.target.value)}
+                          onChange={(event) =>
+                            handleQtyChange(item.id, event.target.value)
+                          }
                         />
                       </td>
-                      <td>Rs. {item.price * item.qty}</td>
+                      <td>{formatCurrency(item.price * item.qty)}</td>
                       <td>
                         <button
                           type="button"
@@ -267,10 +223,14 @@ const CustomerDashboard = () => {
 
             <div className={styles.cartFooter}>
               <p>
-                Cart Total: <strong>Rs. {cartTotal}</strong>
+                Cart Total: <strong>{formatCurrency(cartTotal)}</strong>
               </p>
               <div className={styles.cartActions}>
-                <button type="button" className={styles.clearButton} onClick={handleClearCart}>
+                <button
+                  type="button"
+                  className={styles.clearButton}
+                  onClick={handleClearCart}
+                >
                   Clear Cart
                 </button>
                 <a href="/cart" className={styles.checkoutButton}>
@@ -290,13 +250,17 @@ const CustomerDashboard = () => {
           </a>
         </div>
         <div className={styles.recommendGrid}>
-          {recommended.map((item) => (
-            <article key={item.name} className={styles.recommendCard}>
-              <span className={styles.tag}>{item.tag}</span>
-              <h3>{item.name}</h3>
-              <p>{item.price}</p>
-            </article>
-          ))}
+          {recommended.length === 0 ? (
+            <p className={styles.emptyCart}>No recommendations available.</p>
+          ) : (
+            recommended.map((item) => (
+              <article key={item.id} className={styles.recommendCard}>
+                <span className={styles.tag}>{item.tag}</span>
+                <h3>{item.name}</h3>
+                <p>{item.price}</p>
+              </article>
+            ))
+          )}
         </div>
       </section>
     </section>

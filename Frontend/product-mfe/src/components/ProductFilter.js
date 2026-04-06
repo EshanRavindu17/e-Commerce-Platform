@@ -1,27 +1,72 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import styles from "./ProductFilter.module.css";
-import { PRODUCT_CATEGORIES, PRICE_RANGES, SORT_OPTIONS } from "./constants";
+import { PRICE_RANGES, SORT_OPTIONS } from "./constants";
+import { fetchProductCategories } from "../services/bffProductApi";
 
-export default function ProductFilter({ onFilterChange }) {
+export default function ProductFilter({ onFilterChange, filters = {} }) {
   const [activeCategory, setActiveCategory] = useState("all");
   const [priceRanges, setPriceRanges] = useState({});
   const [sortBy, setSortBy] = useState("featured");
   const [showFilters, setShowFilters] = useState(false);
+  const [categories, setCategories] = useState([
+    { id: "all", label: "All Products", backendValue: "all" },
+  ]);
+  const [categoryError, setCategoryError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCategories = async () => {
+      try {
+        const remoteCategories = await fetchProductCategories();
+        if (!mounted) {
+          return;
+        }
+
+        setCategoryError("");
+
+        setCategories([
+          { id: "all", label: "All Products", backendValue: "all" },
+          ...remoteCategories,
+        ]);
+      } catch (error) {
+        if (mounted) {
+          console.error("Product categories fetch failed:", error);
+          setCategoryError(error.message || "Failed to load categories.");
+          setCategories([
+            { id: "all", label: "All Products", backendValue: "all" },
+          ]);
+        }
+      }
+    };
+
+    loadCategories();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setActiveCategory(filters.activeCategory || "all");
+    setPriceRanges(filters.priceRanges || {});
+    setSortBy(filters.sortBy || "featured");
+  }, [filters.activeCategory, filters.priceRanges, filters.sortBy]);
 
   const handleCategoryChange = (categoryId) => {
     setActiveCategory(categoryId);
-    onFilterChange?.({ category: categoryId, sort: sortBy });
+    onFilterChange?.({ activeCategory: categoryId, sortBy });
   };
 
   const handlePriceChange = (rangeId) => {
     const newRanges = { ...priceRanges, [rangeId]: !priceRanges[rangeId] };
     setPriceRanges(newRanges);
-    onFilterChange?.({ category: activeCategory, priceRanges: newRanges });
+    onFilterChange?.({ activeCategory, priceRanges: newRanges, sortBy });
   };
 
   const handleSortChange = (sortId) => {
     setSortBy(sortId);
-    onFilterChange?.({ category: activeCategory, sort: sortId });
+    onFilterChange?.({ activeCategory, sortBy: sortId, priceRanges });
   };
 
   return (
@@ -65,7 +110,7 @@ export default function ProductFilter({ onFilterChange }) {
         <div className={styles.filterSection}>
           <h4 className={styles.filterTitle}>Categories</h4>
           <div className={styles.categoryList}>
-            {PRODUCT_CATEGORIES.map((category) => (
+            {categories.map((category) => (
               <label key={category.id} className={styles.categoryItem}>
                 <input
                   type="radio"
@@ -75,13 +120,13 @@ export default function ProductFilter({ onFilterChange }) {
                   onChange={() => handleCategoryChange(category.id)}
                   className={styles.radio}
                 />
-                <span className={styles.categoryLabel}>
-                  {category.label}
-                  <span className={styles.count}>{category.count}</span>
-                </span>
+                <span className={styles.categoryLabel}>{category.label}</span>
               </label>
             ))}
           </div>
+          {categoryError ? (
+            <p className={styles.emptyText}>{categoryError}</p>
+          ) : null}
         </div>
 
         {/* Price Range */}
@@ -109,7 +154,11 @@ export default function ProductFilter({ onFilterChange }) {
             setActiveCategory("all");
             setPriceRanges({});
             setSortBy("featured");
-            onFilterChange?.({ category: "all", sort: "featured" });
+            onFilterChange?.({
+              activeCategory: "all",
+              sortBy: "featured",
+              priceRanges: {},
+            });
           }}
         >
           Reset Filters

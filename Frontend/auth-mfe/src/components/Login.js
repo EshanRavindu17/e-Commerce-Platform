@@ -1,15 +1,22 @@
 import React from "react";
 import LoginForm from "./LoginForm";
 import styles from "./Login.module.css";
+import {
+  getPostLoginPath,
+  hydrateUserIdentity,
+  login,
+} from "../services/bffAuthApi";
 
 const Login = () => {
   const handleLogin = async (formData) => {
-
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ success: true, message: "Login successful!" });
-      }, 1500);
-    });
+    const token = await login(formData);
+    await hydrateUserIdentity(token);
+    const redirectPath = await getPostLoginPath(token);
+    return {
+      success: true,
+      message: "Login successful!",
+      redirectPath,
+    };
   };
 
   const handleForgotPassword = () => {

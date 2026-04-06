@@ -103,11 +103,13 @@ const LoginForm = ({ onSubmit, onForgotPassword }) => {
     setSuccessMessage("");
 
     try {
-      await onSubmit({
+      const result = await onSubmit({
         email: formData.email,
         password: formData.password,
         rememberMe: formData.rememberMe,
       });
+
+      const redirectPath = result?.redirectPath || "/customer";
 
       setSuccessMessage("Login successful! Redirecting...");
       setFormData({
@@ -118,7 +120,7 @@ const LoginForm = ({ onSubmit, onForgotPassword }) => {
       setTouched({});
 
       setTimeout(() => {
-        window.location.href = window.location.origin + "/customer";
+        window.location.href = window.location.origin + redirectPath;
       }, 2000);
     } catch (error) {
       setErrors({

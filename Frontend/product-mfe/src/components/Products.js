@@ -13,7 +13,10 @@ const Products = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   const handleFilterChange = useCallback((newFilters) => {
-    setFilters(newFilters);
+    setFilters((prev) => ({
+      ...prev,
+      ...newFilters,
+    }));
     setCurrentPage(1);
   }, []);
 
@@ -50,7 +53,9 @@ const Products = () => {
               onChange={handleSearchChange}
               className={styles.searchInput}
             />
-            <span className={styles.searchHint}>Results update as you type</span>
+            <span className={styles.searchHint}>
+              Results update as you type
+            </span>
           </div>
         </div>
       </div>

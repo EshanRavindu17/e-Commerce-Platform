@@ -1,71 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./root.component.module.css";
-
-const STORAGE_KEY = "nexagrid:supply-ops:v1";
-const EVENT_NAME = "nexagrid:supply-ops:updated";
-
-const seedData = {
-  products: [
-    {
-      id: "PRD-1001",
-      name: "Premium Ceylon Tea",
-      category: "Beverages",
-      price: 18.5,
-      stock: 210,
-      supplier: "Lanka Fresh Exports",
-      lastUpdated: "2026-04-01T08:00:00.000Z",
-    },
-    {
-      id: "PRD-1002",
-      name: "Organic Coconut Oil",
-      category: "Groceries",
-      price: 24.0,
-      stock: 84,
-      supplier: "Lanka Fresh Exports",
-      lastUpdated: "2026-04-02T09:15:00.000Z",
-    },
-    {
-      id: "PRD-1003",
-      name: "Spice Combo Pack",
-      category: "Groceries",
-      price: 32.75,
-      stock: 42,
-      supplier: "Lanka Fresh Exports",
-      lastUpdated: "2026-04-02T12:30:00.000Z",
-    },
-  ],
-  requests: [],
-};
-
-const buildStore = () => {
-  if (typeof window === "undefined") {
-    return seedData;
-  }
-
-  const existing = window.localStorage.getItem(STORAGE_KEY);
-  if (existing) {
-    try {
-      const parsed = JSON.parse(existing);
-      if (parsed?.products && parsed?.requests) {
-        return parsed;
-      }
-    } catch (error) {
-      // Fall through to reset malformed storage.
-    }
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seedData));
-  return seedData;
-};
-
-const persistStore = (nextStore) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextStore));
-  window.dispatchEvent(new CustomEvent(EVENT_NAME));
-};
+import {
+  fetchStewardProducts,
+  updateProductStatus,
+} from "./services/bffStewardApi";
 
 const formatMoney = (amount) => `$${Number(amount).toFixed(2)}`;
 
@@ -78,101 +16,72 @@ const formatDate = (dateString) =>
   });
 
 export default function Root() {
-  const [store, setStore] = useState(buildStore);
+  const [products, setProducts] = useState([]);
   const [decisionNotes, setDecisionNotes] = useState({});
+  const [feedback, setFeedback] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const syncStore = () => setStore(buildStore());
-
-    window.addEventListener(EVENT_NAME, syncStore);
-    window.addEventListener("storage", (event) => {
-      if (event.key === STORAGE_KEY) {
-        syncStore();
-      }
-    });
-
-    return () => {
-      window.removeEventListener(EVENT_NAME, syncStore);
-      window.removeEventListener("storage", syncStore);
-    };
+  const loadProducts = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const nextProducts = await fetchStewardProducts();
+      setProducts(nextProducts);
+      setFeedback("");
+    } catch (error) {
+      setFeedback(error.message || "Unable to load products from BFF.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const pendingRequests = useMemo(
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
+  const pendingProducts = useMemo(
     () =>
-      store.requests
-        .filter((request) => request.status === "Pending")
-        .sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt)),
-    [store.requests],
+      products
+        .filter((product) => product.status === "PENDING")
+        .sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated)),
+    [products],
   );
 
   const recentlyReviewed = useMemo(
     () =>
-      store.requests
-        .filter((request) => request.status !== "Pending")
-        .sort((a, b) => new Date(b.reviewedAt || 0) - new Date(a.reviewedAt || 0))
+      products
+        .filter((product) => product.status !== "PENDING")
+        .sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated))
         .slice(0, 6),
-    [store.requests],
+    [products],
   );
 
   const summary = useMemo(() => {
-    const lowStock = store.products.filter((product) => product.stock < 50).length;
-    const approved = store.requests.filter((request) => request.status === "Approved").length;
+    const lowStock = products.filter((product) => product.stock < 50).length;
+    const approved = products.filter((product) => product.status === "APPROVED").length;
 
     return {
-      totalProducts: store.products.length,
-      pending: pendingRequests.length,
+      totalProducts: products.length,
+      pending: pendingProducts.length,
       approved,
       lowStock,
     };
-  }, [store.products, store.requests, pendingRequests.length]);
+  }, [products, pendingProducts.length]);
 
-  const handleNoteChange = (requestId, value) => {
+  const handleNoteChange = (productId, value) => {
     setDecisionNotes((prev) => ({
       ...prev,
-      [requestId]: value,
+      [productId]: value,
     }));
   };
 
-  const applyDecision = (requestId, status) => {
-    const nextRequests = store.requests.map((request) => {
-      if (request.id !== requestId) {
-        return request;
-      }
-
-      return {
-        ...request,
-        status,
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: "Steward Team",
-        stewardNote: decisionNotes[requestId]?.trim() || "Reviewed",
-      };
-    });
-
-    const approvedRequest = nextRequests.find((request) => request.id === requestId);
-
-    const nextProducts =
-      status === "Approved"
-        ? store.products.map((product) => {
-            if (product.id !== approvedRequest.productId) {
-              return product;
-            }
-
-            return {
-              ...product,
-              price: approvedRequest.proposedPrice,
-              stock: approvedRequest.proposedStock,
-              lastUpdated: new Date().toISOString(),
-            };
-          })
-        : store.products;
-
-    const nextStore = {
-      products: nextProducts,
-      requests: nextRequests,
-    };
-
-    persistStore(nextStore);
-    setStore(nextStore);
+  const applyDecision = async (productId, status) => {
+    try {
+      setFeedback("");
+      await updateProductStatus({ productId, status });
+      await loadProducts();
+    } catch (error) {
+      setFeedback(error.message || "Failed to update product status.");
+    }
   };
 
   return (
@@ -186,6 +95,9 @@ export default function Root() {
           </p>
         </div>
       </header>
+
+      {isLoading ? <p>Loading product approvals from BFF...</p> : null}
+      {feedback ? <p>{feedback}</p> : null}
 
       <section className={styles.statsGrid}>
         <article className={styles.statCard}>
@@ -210,38 +122,36 @@ export default function Root() {
         <article className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2>Pending Supplier Requests</h2>
-            <span>{pendingRequests.length} open</span>
+            <span>{pendingProducts.length} open</span>
           </div>
 
-          {pendingRequests.length === 0 ? (
+          {pendingProducts.length === 0 ? (
             <p className={styles.emptyState}>No pending supplier requests.</p>
           ) : (
             <div className={styles.requestList}>
-              {pendingRequests.map((request) => (
-                <div key={request.id} className={styles.requestCard}>
+              {pendingProducts.map((product) => (
+                <div key={product.id} className={styles.requestCard}>
                   <div className={styles.requestHeader}>
-                    <h3>{request.productName}</h3>
-                    <span>{request.id}</span>
+                    <h3>{product.name}</h3>
+                    <span>{product.id}</span>
                   </div>
                   <p className={styles.requestMeta}>
-                    Supplier: {request.supplier} | Requested: {formatDate(request.requestedAt)}
+                    Supplier: {product.supplier} | Requested: {formatDate(product.lastUpdated)}
                   </p>
-                  <p className={styles.requestReason}>{request.reason}</p>
+                  <p className={styles.requestReason}>
+                    {product.description || "No supplier note provided."}
+                  </p>
                   <div className={styles.changeGrid}>
-                    <p>
-                      Price: {formatMoney(request.currentPrice)} to {formatMoney(request.proposedPrice)}
-                    </p>
-                    <p>
-                      Stock: {request.currentStock} to {request.proposedStock}
-                    </p>
+                    <p>Price: {formatMoney(product.price)}</p>
+                    <p>Stock: {product.stock}</p>
                   </div>
 
-                  <label htmlFor={`note-${request.id}`}>Steward Note</label>
+                  <label htmlFor={`note-${product.id}`}>Steward Note</label>
                   <textarea
-                    id={`note-${request.id}`}
+                    id={`note-${product.id}`}
                     rows="2"
-                    value={decisionNotes[request.id] || ""}
-                    onChange={(event) => handleNoteChange(request.id, event.target.value)}
+                    value={decisionNotes[product.id] || ""}
+                    onChange={(event) => handleNoteChange(product.id, event.target.value)}
                     placeholder="Decision note"
                   />
 
@@ -249,14 +159,14 @@ export default function Root() {
                     <button
                       type="button"
                       className={styles.approveButton}
-                      onClick={() => applyDecision(request.id, "Approved")}
+                      onClick={() => applyDecision(product.id, "APPROVED")}
                     >
                       Approve
                     </button>
                     <button
                       type="button"
                       className={styles.rejectButton}
-                      onClick={() => applyDecision(request.id, "Rejected")}
+                      onClick={() => applyDecision(product.id, "REJECTED")}
                     >
                       Reject
                     </button>
@@ -270,7 +180,7 @@ export default function Root() {
         <article className={styles.panel}>
           <div className={styles.panelHeader}>
             <h2>Current Product Stock</h2>
-            <span>Auto-updated on approval</span>
+            <span>Live from BFF</span>
           </div>
 
           <div className={styles.tableWrap}>
@@ -281,11 +191,12 @@ export default function Root() {
                   <th>Supplier</th>
                   <th>Price</th>
                   <th>Stock</th>
+                  <th>Status</th>
                   <th>Updated</th>
                 </tr>
               </thead>
               <tbody>
-                {store.products.map((product) => (
+                {products.map((product) => (
                   <tr key={product.id}>
                     <td>{product.name}</td>
                     <td>{product.supplier}</td>
@@ -297,6 +208,11 @@ export default function Root() {
                         }
                       >
                         {product.stock}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={styles[String(product.status || "pending").toLowerCase()]}>
+                        {String(product.status || "PENDING").toLowerCase()}
                       </span>
                     </td>
                     <td>{formatDate(product.lastUpdated)}</td>
@@ -318,30 +234,30 @@ export default function Root() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Request</th>
                 <th>Product</th>
                 <th>Decision</th>
-                <th>Steward</th>
-                <th>Note</th>
+                <th>Supplier</th>
+                <th>Steward Note</th>
                 <th>Reviewed At</th>
               </tr>
             </thead>
             <tbody>
               {recentlyReviewed.length === 0 ? (
                 <tr>
-                  <td colSpan="6">No reviewed requests yet.</td>
+                  <td colSpan="5">No reviewed requests yet.</td>
                 </tr>
               ) : (
-                recentlyReviewed.map((request) => (
-                  <tr key={request.id}>
-                    <td>{request.id}</td>
-                    <td>{request.productName}</td>
+                recentlyReviewed.map((product) => (
+                  <tr key={product.id}>
+                    <td>{product.name}</td>
                     <td>
-                      <span className={styles[request.status.toLowerCase()]}>{request.status}</span>
+                      <span className={styles[String(product.status).toLowerCase()]}>
+                        {String(product.status).toLowerCase()}
+                      </span>
                     </td>
-                    <td>{request.reviewedBy}</td>
-                    <td>{request.stewardNote}</td>
-                    <td>{formatDate(request.reviewedAt)}</td>
+                    <td>{product.supplier}</td>
+                    <td>{decisionNotes[product.id] || "Reviewed"}</td>
+                    <td>{formatDate(product.lastUpdated)}</td>
                   </tr>
                 ))
               )}
